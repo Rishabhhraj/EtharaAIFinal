@@ -1,26 +1,36 @@
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
-import User from '../models/User.js';
-import { userCanAccessProject, userIsProjectAdmin, toIdString } from '../utils/projectAccess.js';
+import { userCanAccessProject, userIsProjectAdmin } from '../utils/projectAccess.js';
 import { rejectIfArchived } from '../utils/projectArchived.js';
 import { createNotification } from '../utils/notify.js';
 import { sortTasksByPriorityAndDue } from '../utils/taskSort.js';
+import {
+  normalizeAssigneeInput,
+  getTaskAssigneeIds,
+  userIsTaskAssignee,
+  validateProjectAssignees,
+} from '../utils/taskAssignees.js';
 
 const populateTask = (query) =>
   query
     .populate('project', 'name status')
     .populate('assignedTo', 'name email')
+    .populate('assignees', 'name email')
     .populate('createdBy', 'name email');
 
-const notifyAssignment = async (task, project, assigneeId) => {
-  if (!assigneeId) return;
-  await createNotification({
-    userId: assigneeId,
-    message: `You were assigned to task "${task.title}" in ${project.name}`,
-    type: 'assigned',
-    relatedTask: task._id,
-    relatedProject: project._id,
-  });
+const notifyNewAssignees = async (task, project, assigneeIds, previousIds) => {
+  const prev = new Set(previousIds);
+  for (const assigneeId of assigneeIds) {
+    if (!prev.has(assigneeId)) {
+      await createNotification({
+        userId: assigneeId,
+        message: `You were assigned to task "${task.title}" in ${project.name}`,
+        type: 'assigned',
+        relatedTask: task._id,
+        relatedProject: project._id,
+      });
+    }
+  }
 };
 
 export const getTasksByProject = async (req, res) => {
@@ -55,43 +65,33 @@ export const createTask = async (req, res) => {
     }
     if (rejectIfArchived(project, res)) return;
 
-    const { title, description, assignedTo, status, dueDate, priority } = req.body;
-
-    if (assignedTo) {
-      const assignee = await User.findById(assignedTo);
-      if (!assignee) {
-        return res.status(400).json({ success: false, message: 'Assignee not found' });
-      }
-      const isMember =
-        project.members.some((m) => toIdString(m) === assignedTo) ||
-        toIdString(project.createdBy) === assignedTo;
-      if (!isMember && assignee.role === 'member') {
-        return res.status(400).json({
-          success: false,
-          message: 'Assignee must be a member of this project',
-        });
-      }
-    }
+    const { title, description, status, dueDate, priority } = req.body;
+    const assigneeIds = await validateProjectAssignees(
+      project,
+      normalizeAssigneeInput(req.body)
+    );
 
     const task = await Task.create({
       title,
       description: description || '',
       project: project._id,
-      assignedTo: assignedTo || null,
+      assignees: assigneeIds,
+      assignedTo: assigneeIds[0] || null,
       status: status || 'todo',
       priority: priority || 'medium',
       dueDate: dueDate || null,
       createdBy: req.user._id,
     });
 
-    if (assignedTo) {
-      await notifyAssignment(task, project, assignedTo);
+    if (assigneeIds.length) {
+      await notifyNewAssignees(task, project, assigneeIds, []);
     }
 
     const populated = await populateTask(Task.findById(task._id));
     res.status(201).json({ success: true, task: populated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    const status = err.message.includes('assignee') ? 400 : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 };
 
@@ -109,25 +109,25 @@ export const updateTask = async (req, res) => {
     if (rejectIfArchived(project, res)) return;
 
     const isAdmin = userIsProjectAdmin(project, req.user._id, req.user.role);
-    const isAssignee =
-      task.assignedTo && task.assignedTo.toString() === req.user._id.toString();
+    const isAssignee = userIsTaskAssignee(task, req.user._id);
 
-    const { title, description, assignedTo, status, dueDate, priority } = req.body;
-    const previousAssignee = task.assignedTo ? task.assignedTo.toString() : null;
+    const { title, description, status, dueDate, priority } = req.body;
+    const previousAssigneeIds = getTaskAssigneeIds(task);
+    const hasAssigneeUpdate =
+      req.body.assigneeIds !== undefined || req.body.assignedTo !== undefined;
 
     if (isAdmin) {
       if (title) task.title = title;
       if (description !== undefined) task.description = description;
       if (dueDate !== undefined) task.dueDate = dueDate;
       if (priority) task.priority = priority;
-      if (assignedTo !== undefined) {
-        if (assignedTo) {
-          const assignee = await User.findById(assignedTo);
-          if (!assignee) {
-            return res.status(400).json({ success: false, message: 'Assignee not found' });
-          }
-        }
-        task.assignedTo = assignedTo || null;
+      if (hasAssigneeUpdate) {
+        const assigneeIds = await validateProjectAssignees(
+          project,
+          normalizeAssigneeInput(req.body)
+        );
+        task.assignees = assigneeIds;
+        task.assignedTo = assigneeIds[0] || null;
       }
       if (status) task.status = status;
     } else if (isAssignee && status) {
@@ -147,16 +147,17 @@ export const updateTask = async (req, res) => {
 
     await task.save();
 
-    const newAssignee = task.assignedTo ? task.assignedTo.toString() : null;
-    if (newAssignee && newAssignee !== previousAssignee) {
+    if (isAdmin && hasAssigneeUpdate) {
+      const newAssigneeIds = getTaskAssigneeIds(task);
       const projectDoc = await Project.findById(project._id || project);
-      await notifyAssignment(task, projectDoc, newAssignee);
+      await notifyNewAssignees(task, projectDoc, newAssigneeIds, previousAssigneeIds);
     }
 
     const populated = await populateTask(Task.findById(task._id));
     res.json({ success: true, task: populated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    const status = err.message.includes('assignee') ? 400 : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 };
 

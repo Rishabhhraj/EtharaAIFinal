@@ -2,6 +2,7 @@ import StatusChangeRequest from '../models/StatusChangeRequest.js';
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import { userCanAccessProject, userIsProjectAdmin, toIdString } from '../utils/projectAccess.js';
+import { userIsTaskAssignee } from '../utils/taskAssignees.js';
 import { rejectIfArchived } from '../utils/projectArchived.js';
 import { createNotification } from '../utils/notify.js';
 
@@ -33,8 +34,7 @@ export const createStatusRequest = async (req, res) => {
       });
     }
 
-    const assigneeId = toIdString(task.assignedTo);
-    if (assigneeId !== toIdString(req.user._id)) {
+    if (!userIsTaskAssignee(task, req.user._id)) {
       return res.status(403).json({
         success: false,
         message: 'You can only request status changes for tasks assigned to you',

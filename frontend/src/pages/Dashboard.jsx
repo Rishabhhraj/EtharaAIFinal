@@ -22,6 +22,16 @@ function StatusBar({ label, count, total, color }) {
   );
 }
 
+function formatAssignees(task) {
+  const list = task.assignees?.length
+    ? task.assignees
+    : task.assignedTo
+      ? [task.assignedTo]
+      : [];
+  if (!list.length) return 'Unassigned';
+  return list.map((a) => a.name).join(', ');
+}
+
 function daysUntil(dueDate) {
   const due = new Date(dueDate);
   due.setHours(0, 0, 0, 0);
@@ -200,7 +210,7 @@ export default function Dashboard() {
                         {t.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td>{t.assignedTo?.name || 'Unassigned'}</td>
+                    <td>{formatAssignees(t)}</td>
                     <td>{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}</td>
                   </tr>
                 ))}

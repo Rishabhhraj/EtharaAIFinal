@@ -17,13 +17,14 @@ export const getDashboard = async (req, res) => {
     if (req.user.role === 'member') {
       taskFilter = {
         project: { $in: projectIds },
-        assignedTo: req.user._id,
+        $or: [{ assignedTo: req.user._id }, { assignees: req.user._id }],
       };
     }
 
     let tasks = await Task.find(taskFilter)
       .populate('project', 'name status')
-      .populate('assignedTo', 'name email');
+      .populate('assignedTo', 'name email')
+      .populate('assignees', 'name email');
 
     tasks = sortTasksByPriorityAndDue(tasks);
 

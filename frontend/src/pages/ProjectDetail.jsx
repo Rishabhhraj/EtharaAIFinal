@@ -19,6 +19,26 @@ const PRIORITIES = [
   { value: 'high', label: 'High' },
 ];
 
+const getTaskAssigneeIds = (task) => {
+  if (task.assignees?.length) {
+    return task.assignees.map((a) => (a._id || a).toString());
+  }
+  if (task.assignedTo) {
+    return [(task.assignedTo._id || task.assignedTo).toString()];
+  }
+  return [];
+};
+
+const formatAssigneeNames = (task) => {
+  const list = task.assignees?.length
+    ? task.assignees
+    : task.assignedTo
+      ? [task.assignedTo]
+      : [];
+  if (!list.length) return 'Unassigned';
+  return list.map((a) => a.name).join(', ');
+};
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const { user, isAdmin } = useAuth();
@@ -31,7 +51,7 @@ export default function ProjectDetail() {
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    assignedTo: '',
+    assigneeIds: [],
     status: 'todo',
     priority: 'medium',
     dueDate: '',
@@ -92,14 +112,17 @@ export default function ProjectDetail() {
     e.preventDefault();
     try {
       await api.createTask(id, {
-        ...taskForm,
-        assignedTo: taskForm.assignedTo || undefined,
+        title: taskForm.title,
+        description: taskForm.description,
+        assigneeIds: taskForm.assigneeIds,
+        status: taskForm.status,
+        priority: taskForm.priority,
         dueDate: taskForm.dueDate || undefined,
       });
       setTaskForm({
         title: '',
         description: '',
-        assignedTo: '',
+        assigneeIds: [],
         status: 'todo',
         priority: 'medium',
         dueDate: '',
@@ -126,6 +149,16 @@ export default function ProjectDetail() {
     try {
       await api.updateTask(taskId, { priority });
       showSuccess('Task priority updated');
+      load();
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const handleAssigneesChange = async (taskId, assigneeIds) => {
+    try {
+      await api.updateTask(taskId, { assigneeIds });
+      showSuccess(assigneeIds.length ? 'Assignees updated' : 'Task unassigned');
       load();
     } catch (err) {
       showError(err.message);
@@ -230,8 +263,7 @@ export default function ProjectDetail() {
 
   const canEditTask = (task) => {
     if (isAdmin) return true;
-    const assigneeId = task.assignedTo?._id || task.assignedTo;
-    return assigneeId && assigneeId.toString() === user.id;
+    return getTaskAssigneeIds(task).includes(user.id);
   };
 
   const isOverdue = (task) =>
@@ -412,13 +444,19 @@ export default function ProjectDetail() {
                 />
               </div>
               <div className="form-row">
-                <div className="form-group">
-                  <label>Assign to</label>
+                <div className="form-group form-group-wide">
+                  <label>Assign to (hold Ctrl/Cmd for multiple)</label>
                   <select
-                    value={taskForm.assignedTo}
-                    onChange={(e) => setTaskForm((f) => ({ ...f, assignedTo: e.target.value }))}
+                    multiple
+                    value={taskForm.assigneeIds}
+                    onChange={(e) =>
+                      setTaskForm((f) => ({
+                        ...f,
+                        assigneeIds: Array.from(e.target.selectedOptions, (o) => o.value),
+                      }))
+                    }
+                    className="member-select"
                   >
-                    <option value="">Unassigned</option>
                     {teamOptions().map((m) => (
                       <option key={m._id} value={m._id}>
                         {m.name}
@@ -474,7 +512,7 @@ export default function ProjectDetail() {
                   </div>
                   {t.description && <p className="task-desc">{t.description}</p>}
                   <div className="task-card-meta">
-                    <span>Assignee: {t.assignedTo?.name || 'Unassigned'}</span>
+                    <span>Assignees: {formatAssigneeNames(t)}</span>
                     <span>
                       Due: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}
                     </span>
@@ -482,6 +520,27 @@ export default function ProjectDetail() {
                   <div className="task-card-actions">
                     {isAdmin && !readOnly && (
                       <>
+                        <div className="assignee-edit">
+                          <label className="assignee-edit-label">Assignees</label>
+                          <select
+                            multiple
+                            value={getTaskAssigneeIds(t)}
+                            onChange={(e) =>
+                              handleAssigneesChange(
+                                t._id,
+                                Array.from(e.target.selectedOptions, (o) => o.value)
+                              )
+                            }
+                            className="member-select assignee-select"
+                            title="Hold Ctrl (Windows) or Cmd (Mac) to select multiple"
+                          >
+                            {teamOptions().map((m) => (
+                              <option key={m._id} value={m._id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <select
                           value={t.priority || 'medium'}
                           onChange={(e) => handlePriorityChange(t._id, e.target.value)}

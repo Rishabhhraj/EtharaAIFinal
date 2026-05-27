@@ -24,6 +24,12 @@ const taskSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    assignees: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     status: {
       type: String,
       enum: {
@@ -55,6 +61,7 @@ const taskSchema = new mongoose.Schema(
 
 taskSchema.index({ project: 1 });
 taskSchema.index({ assignedTo: 1 });
+taskSchema.index({ assignees: 1 });
 taskSchema.index({ dueDate: 1 });
 taskSchema.index({ status: 1 });
 taskSchema.index({ priority: 1 });

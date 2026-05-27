@@ -5,6 +5,7 @@ import { userCanAccessProject } from '../utils/projectAccess.js';
 import { rejectIfArchived } from '../utils/projectArchived.js';
 import { createNotification } from '../utils/notify.js';
 import { toIdString } from '../utils/projectAccess.js';
+import { getTaskAssigneeIds } from '../utils/taskAssignees.js';
 
 export const getTaskComments = async (req, res) => {
   try {
@@ -53,7 +54,9 @@ export const createComment = async (req, res) => {
 
     const notifyIds = new Set();
     if (project.createdBy) notifyIds.add(toIdString(project.createdBy));
-    if (task.assignedTo) notifyIds.add(toIdString(task.assignedTo));
+    for (const aid of getTaskAssigneeIds(task)) {
+      notifyIds.add(aid);
+    }
     notifyIds.delete(toIdString(req.user._id));
 
     for (const uid of notifyIds) {

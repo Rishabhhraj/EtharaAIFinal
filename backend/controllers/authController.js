@@ -103,9 +103,11 @@ export const getProfile = async (req, res) => {
     const projects = await Project.find(projectFilter).select('_id name status createdAt');
     const projectIds = projects.map((p) => p._id);
 
-    const assignedFilter = { assignedTo: userId };
+    const assignedFilter = {
+      $or: [{ assignedTo: userId }, { assignees: userId }],
+    };
     const [assignedTasks, unreadNotifications] = await Promise.all([
-      Task.find(assignedFilter).select('status priority project'),
+      Task.find(assignedFilter).select('status priority project assignees assignedTo'),
       Notification.countDocuments({ userId, read: false }),
     ]);
 
