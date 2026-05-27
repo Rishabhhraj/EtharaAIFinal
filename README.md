@@ -1,226 +1,260 @@
-# Team Task Manager (Full-Stack)
+# Team Task Manager (EtharaAI)
 
-A MERN stack web application for creating projects, assigning tasks to team members, and tracking progress with **role-based access control (Admin vs Member)**.
+A full-stack **MERN** team task management application with **JWT authentication**, **admin/member RBAC**, projects, multi-assign tasks, status approval workflow, notifications, comments, and a production deployment on **Railway**.
+
+---
+
+## Quick links (submission)
+
+| Resource | URL |
+|----------|-----|
+| **Live application** | [https://web-production-871fd.up.railway.app](https://web-production-871fd.up.railway.app) |
+| **API health check** | [https://web-production-871fd.up.railway.app/api/health](https://web-production-871fd.up.railway.app/api/health) |
+| **GitHub repository** | [https://github.com/Rishabhhraj/EtharaAIFinal](https://github.com/Rishabhhraj/EtharaAIFinal) |
+| **Deployment guide** | [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| **Submission packet** | [SUBMISSION.md](./SUBMISSION.md) |
+
+**Author:** Rishabhhraj ([GitHub](https://github.com/Rishabhhraj))
+
+---
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Authentication** | Secure signup and login with JWT |
-| **Project & Team Management** | Admins create projects and add/remove team members |
-| **Task Management** | Create tasks, assign users, update status (`todo`, `in_progress`, `done`) |
-| **Dashboard** | Stats, status bars, overdue tasks, **due in 3 days** (client-side), priority-sorted lists |
-| **RBAC** | Admin: full control. Member: projects they belong to; **dashboard shows only tasks assigned to them** |
-| **Status requests** | Members request status changes; admins approve or reject (with confirm on reject) |
-| **Notifications** | In-app bell: assignment, approval/rejection, new comments |
-| **Comments** | Thread on each task for admin ↔ member communication |
-| **Project archive** | `active` / `archived` — archived projects are read-only |
-| **Task priority** | `low` \| `medium` \| `high` — used for dashboard sorting |
-| **UX** | Toasts, dashboard skeleton, session-expired redirect, password show/hide + strength hint |
+| **Authentication** | Signup/login with JWT; bcrypt password hashing; session-expired redirect |
+| **RBAC** | **Admin** — full project/task control. **Member** — project access when added; dashboard shows **only their assigned tasks** |
+| **Projects & teams** | Admins create projects, add/remove members, archive/restore projects |
+| **Tasks** | Create, update priority/status, due dates, delete; **multi-assign / reassign** after creation |
+| **Status requests** | Members request status changes; admins approve or reject (confirm on reject) |
+| **Dashboard** | Stats, status bars, overdue tasks, **due in 3 days**, priority-sorted lists |
+| **Notifications** | In-app bell: assigned, status approved/rejected, new comments |
+| **Comments** | Per-task threads for admin ↔ member communication |
+| **User profile** | `/profile` — account details, stats, project list |
+| **Project archive** | `active` / `archived` (archived = read-only) |
+| **Task priority** | `low` \| `medium` \| `high` |
+| **UX** | Toasts, loading skeletons, password show/hide + strength hint, responsive layout |
 
-## Tech Stack
+---
 
-- **MongoDB** — database with Mongoose ODM and entity relationships
-- **Express** — REST API with validation and JWT auth
-- **React** — SPA (Vite) with React Router
-- **Node.js** — backend runtime
+## Tech stack
 
-## Project Structure
+- **MongoDB** + Mongoose
+- **Express** — REST API, validation, rate limiting, CORS
+- **React** (Vite) + React Router
+- **Node.js** 18+
+- **Railway** — hosting (single service: API + static frontend)
+
+---
+
+## Project structure
 
 ```
-├── backend/          # Express API, models, routes, RBAC middleware
-├── frontend/         # React (Vite) client
-├── package.json      # Root scripts for build & deploy
-├── railway.json      # Railway deployment config
+├── backend/           # Express API, models, controllers, middleware
+├── frontend/          # React (Vite) SPA
+├── scripts/           # Local MongoDB helpers (Windows)
+├── railway.json       # Railway build/start config
+├── DEPLOYMENT.md      # Railway setup steps
+├── SUBMISSION.md      # Assignment submission summary
 └── README.md
 ```
 
-## API Endpoints
+---
 
-### Auth
-- `POST /api/auth/register` — Sign up (first user = admin; others = member unless `adminInviteCode` matches `ADMIN_INVITE_CODE`)
-- `POST /api/auth/login` — Login
-- `GET /api/auth/me` — Current user (protected)
-- `GET /api/auth/profile` — Full profile with stats and project list
-
-### Projects
-- `GET /api/projects` — List projects (admin: owned, member: assigned)
-- `POST /api/projects` — Create project (admin only)
-- `GET /api/projects/:id` — Project details
-- `PUT /api/projects/:id` — Update project (admin only); body may include `status`: `active` \| `archived`
-- `DELETE /api/projects/:id` — Delete project (admin only)
-- `POST /api/projects/:id/members` — Add team members (admin only)
-- `DELETE /api/projects/:id/members/:memberId` — Remove member (admin only)
-
-### Tasks
-- `GET /api/tasks/project/:projectId` — List tasks
-- `POST /api/tasks/project/:projectId` — Create task (admin only)
-- `PUT /api/tasks/:id` — Update task (admin: full; member: status on assigned tasks via status requests)
-- `DELETE /api/tasks/:id` — Delete task (admin only)
-
-Task fields include `priority` (`low` \| `medium` \| `high`) and optional `dueDate`.
-
-### Dashboard
-- `GET /api/dashboard` — Stats, status breakdown, overdue, **dueSoon** (due within 3 days), recent tasks sorted by priority. Members receive `memberViewNote` and counts only for **their assigned** tasks.
-
-### Status change requests
-- `GET /api/status-requests/project/:projectId/pending` — Pending requests (admin)
-- `GET /api/status-requests/project/:projectId` — Member’s own requests
-- `POST /api/status-requests/task/:taskId` — Submit request (`requestedStatus`)
-- `PATCH /api/status-requests/:id/approve` — Approve (admin)
-- `PATCH /api/status-requests/:id/reject` — Reject (admin)
-
-### Notifications
-- `GET /api/notifications` — List + unread count
-- `PATCH /api/notifications/:id/read` — Mark one read
-- `PATCH /api/notifications/read-all` — Mark all read
-
-Types: `assigned`, `status_approved`, `status_rejected`, `comment`.
-
-### Comments
-- `GET /api/comments/task/:taskId` — List comments
-- `POST /api/comments/task/:taskId` — Add comment (`text`)
-
-### Users
-- `GET /api/users/members` — List members for team assignment (admin only)
-
-## Member vs admin behavior
-
-| Area | Admin | Member |
-|------|--------|--------|
-| Projects | Create, edit, archive, delete; manage team | View projects they are added to |
-| Tasks | Create, assign, delete, change status directly | See all tasks in project; **edit status only on tasks assigned to them** (via approval request) |
-| Dashboard | All tasks in their projects | **Only tasks assigned to them** (not unassigned pool tasks) |
-| Archived project | Can restore | Read-only view |
-
-## Local Development
+## Getting started locally
 
 ### Prerequisites
+
 - Node.js 18+
-- MongoDB (see options below)
+- MongoDB (local, portable script, Atlas, or embedded — see below)
 
-### MongoDB setup (Windows)
+### 1. Clone
 
-**Option A — Portable (no admin, recommended for this project)**
+```bash
+git clone https://github.com/Rishabhhraj/EtharaAIFinal.git
+cd EtharaAIFinal
+```
+
+### 2. Install
+
+```bash
+npm run install:all
+```
+
+### 3. Environment
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` (see [backend/.env.example](./backend/.env.example)):
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/team-task-manager
+USE_EMBEDDED_MONGO=false
+JWT_SECRET=your_local_secret
+NODE_ENV=development
+CLIENT_URL=http://localhost:3000
+ADMIN_INVITE_CODE=your_optional_admin_code
+AUTH_RATE_LIMIT_MAX=30
+```
+
+### 4. MongoDB (Windows options)
+
+**Portable (recommended):**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-portable-mongo.ps1
 powershell -ExecutionPolicy Bypass -File scripts/start-mongo.ps1
 ```
 
-Data is stored in `data/mongodb/`. Set `USE_EMBEDDED_MONGO=false` in `backend/.env`.
+**Atlas:** set `MONGODB_URI` to your Atlas connection string.
 
-**Option B — System install (requires Administrator PowerShell)**
+**Embedded (no install, data lost on restart):** `USE_EMBEDDED_MONGO=true`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install-mongodb.ps1
+### 5. Run
+
+```bash
+# Terminal 1
+npm run dev:backend
+
+# Terminal 2
+npm run dev:frontend
 ```
 
-**Option C — [MongoDB Atlas](https://www.mongodb.com/atlas)** — paste connection string into `MONGODB_URI`.
-
-**Option D — In-memory (no install, data lost on restart)** — set `USE_EMBEDDED_MONGO=true` in `backend/.env`.
-
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd team-task-manager
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm run install:all
-   ```
-
-3. **Configure backend environment**
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-   Edit `backend/.env`:
-   ```
-   PORT=5000
-   MONGODB_URI=mongodb://localhost:27017/team-task-manager
-   JWT_SECRET=your_secret_key_here
-   NODE_ENV=development
-   CLIENT_URL=http://localhost:3000
-   ADMIN_INVITE_CODE=your_optional_admin_code
-   ```
-
-4. **Start MongoDB** (if running locally)
-
-5. **Run backend** (terminal 1)
-   ```bash
-   npm run dev:backend
-   ```
-
-6. **Run frontend** (terminal 2)
-   ```bash
-   npm run dev:frontend
-   ```
-
-7. Open **http://localhost:3000**
+Open [http://localhost:3000](http://localhost:3000).
 
 ### Demo workflow
 
-1. **Sign up** as **Admin** — create projects and tasks.
-2. **Sign up** as **Member** (different email) — in another browser/incognito.
-3. As Admin: create a project, add the member to the team, create tasks and assign them.
-4. As Member: open the project, request status changes on **your assigned** tasks; admin approves from the project page.
-5. View **Dashboard** — overdue, **due in 3 days**, priority-sorted recent tasks. Check the **notification bell** after assignments/approvals.
-6. Try **comments** on a task, **archive** a project (read-only), and **priority** on new tasks.
+1. **Sign up** — first account becomes **admin**.
+2. **Sign up** a second user as **member** (incognito / different email).
+3. **Admin:** create project → add member → create tasks → multi-assign assignees → set priority/due date.
+4. **Member:** open project → request status change → admin approves.
+5. **Dashboard**, **Profile**, **notifications**, **comments**, **archive** a project.
 
-## Deployment on Railway (Required)
+---
 
-See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for a step-by-step Railway checklist.
+## API reference
 
-### 1. Push to GitHub
-Create a repository and push this project.
+Base URL (local): `http://localhost:5000/api`  
+Base URL (production): `https://web-production-871fd.up.railway.app/api`
 
-### 2. Create Railway project
-1. Go to [railway.app](https://railway.app) and sign in.
-2. **New Project** → **Deploy from GitHub repo** → select your repo.
+### Auth
 
-### 3. Add MongoDB
-1. In the project, click **+ New** → **Database** → **MongoDB**.
-2. Copy the `MONGO_URL` (or `MONGODB_URI`) connection string from the MongoDB service variables.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Sign up (first user = admin; optional `adminInviteCode`) |
+| POST | `/auth/login` | Login |
+| GET | `/auth/me` | Current user |
+| GET | `/auth/profile` | Profile + stats + projects |
 
-### 4. Configure the web service
-Set environment variables on your **web** service:
+### Projects
 
-| Variable | Value |
-|----------|--------|
-| `MONGODB_URI` | MongoDB connection string from Railway |
-| `JWT_SECRET` | A long random secret string |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/projects` | List projects |
+| POST | `/projects` | Create (admin) |
+| GET | `/projects/:id` | Details |
+| PUT | `/projects/:id` | Update; `status`: `active` \| `archived` |
+| DELETE | `/projects/:id` | Delete (admin) |
+| POST | `/projects/:id/members` | Add members |
+| DELETE | `/projects/:id/members/:memberId` | Remove member |
+
+### Tasks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/tasks/project/:projectId` | List tasks |
+| POST | `/tasks/project/:projectId` | Create (admin); body: `assigneeIds[]`, `priority`, `dueDate` |
+| PUT | `/tasks/:id` | Update (admin); `assigneeIds[]` for multi-assign/reassign |
+| DELETE | `/tasks/:id` | Delete (admin) |
+
+### Dashboard
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/dashboard` | Stats, overdue, due soon (3 days), recent tasks |
+
+### Status requests
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/status-requests/project/:id/pending` | Pending (admin) |
+| GET | `/status-requests/project/:id` | Member’s requests |
+| POST | `/status-requests/task/:taskId` | Submit request |
+| PATCH | `/status-requests/:id/approve` | Approve |
+| PATCH | `/status-requests/:id/reject` | Reject |
+
+### Notifications & comments
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/notifications` | List + unread count |
+| PATCH | `/notifications/:id/read` | Mark read |
+| PATCH | `/notifications/read-all` | Mark all read |
+| GET | `/comments/task/:taskId` | List comments |
+| POST | `/comments/task/:taskId` | Add comment |
+
+### Users
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users/members` | List members (admin) |
+
+---
+
+## Admin vs member
+
+| Area | Admin | Member |
+|------|--------|--------|
+| Projects | Create, archive, delete, manage team | View projects they belong to |
+| Tasks | Create, multi-assign, priority, status, delete | View all tasks; **status change via request** on assigned tasks only |
+| Dashboard | All tasks in their projects | **Only tasks where they are an assignee** |
+| Archived project | Can restore | Read-only |
+
+---
+
+## Production deployment (Railway)
+
+Deployed as one service (API + React build). Full steps: **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+
+**Production URL:** [https://web-production-871fd.up.railway.app](https://web-production-871fd.up.railway.app)
+
+Required env vars on the **web** service:
+
+| Variable | Purpose |
+|----------|---------|
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | Your Railway app URL (e.g. `https://your-app.up.railway.app`) |
-| `ADMIN_INVITE_CODE` | Optional; required to create additional admin accounts |
-| `PORT` | Railway sets this automatically |
+| `MONGODB_URI` | Railway MongoDB connection string |
+| `JWT_SECRET` | Strong secret |
+| `CLIENT_URL` | `https://web-production-871fd.up.railway.app` |
 
-### 5. Build settings
-Railway uses `railway.json`:
-- **Build:** `npm run install:all && npm run build`
-- **Start:** `npm start` (serves API + React build from one service)
+Build/start (from `railway.json`):
 
-### 6. Generate domain
-In the web service → **Settings** → **Networking** → **Generate Domain**.
+- `npm run install:all && npm run build`
+- `npm start`
 
-Your live URL will look like: `https://your-app.up.railway.app`
-
-## Submission Checklist
-
-- [ ] Live URL (Railway deployment)
-- [ ] GitHub repository link
-- [ ] This README (setup, API, deployment)
-- [ ] 2–5 minute demo video (signup, projects, tasks, dashboard, admin vs member)
+---
 
 ## Security
 
-- Passwords hashed with bcrypt
-- JWT for authenticated requests
-- RBAC middleware on protected routes
-- Project access enforced per user role and membership
-- Input validation via `express-validator`
+- Bcrypt password hashing
+- JWT authentication on protected routes
+- RBAC + project membership checks
+- `express-validator` input validation
+- ObjectId validation on route params
+- Auth rate limiting (`/api/auth/*`)
+- CORS restricted via `CLIENT_URL` in production
+- Admin signup gated by first-user rule + optional `ADMIN_INVITE_CODE`
+
+---
+
+## Assignment submission
+
+See **[SUBMISSION.md](./SUBMISSION.md)** for the complete checklist, demo script, and links for your instructor.
+
+---
 
 ## License
 
