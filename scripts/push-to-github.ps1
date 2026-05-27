@@ -9,7 +9,7 @@
 param(
   [string]$Token = $env:GITHUB_TOKEN,
   [string]$User = "Rishabhhraj",
-  [string]$Repo = "EtharaAIProject"
+  [string]$Repo = "EtharaAIFinal"
 )
 
 $ErrorActionPreference = "Stop"

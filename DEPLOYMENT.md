@@ -4,12 +4,12 @@ Deploy **Team Task Manager** as a single web service (API + React static build).
 
 ## Prerequisites
 
-- GitHub repo: [EtharaAIProject](https://github.com/Rishabhhraj/EtharaAIProject)
+- GitHub repo: [EtharaAIFinal](https://github.com/Rishabhhraj/EtharaAIFinal)
 - [Railway](https://railway.app) account
 
 ## 1. Create Railway project
 
-1. **New Project** → **Deploy from GitHub repo** → select `EtharaAIProject`.
+1. **New Project** → **Deploy from GitHub repo** → select `EtharaAIFinal`.
 2. Railway detects `railway.json` and runs:
    - **Build:** `npm run install:all && npm run build`
    - **Start:** `npm start` (Express serves API + `frontend/dist`)
